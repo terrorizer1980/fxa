@@ -58,6 +58,7 @@ import {
   apiDetachFailedPaymentMethod,
   apiGetPaypalCheckoutToken,
   apiCapturePaypalPayment,
+  apiUpdateBillingAgreement,
 } from './apiClient';
 import { ProviderType } from './PaymentProvider';
 
@@ -535,6 +536,48 @@ describe('API requests', () => {
       expect(
         <jest.Mock>createSubscriptionWithPaymentMethod_REJECTED
       ).toBeCalledWith({
+        ...metricsOptions,
+        error,
+      });
+      requestMock.done();
+    });
+  });
+
+  describe('apiUpdateBillingAgreement', () => {
+    const path = '/v1/oauth/subscriptions/paymentmethod/billing-agreement';
+    const params = {
+      token: MOCK_CHECKOUT_TOKEN.token,
+    };
+    const metricsOptions = {
+      paymentProvider: 'paypal',
+    };
+
+    it(`POST {auth-server}${path}`, async () => {
+      const requestMock = nock(AUTH_BASE_URL)
+        .post(path)
+        .reply(200, MOCK_CUSTOMER);
+
+      expect(await apiUpdateBillingAgreement(params)).toEqual(MOCK_CUSTOMER);
+
+      expect(<jest.Mock>updatePayment_PENDING).toBeCalledWith(metricsOptions);
+      expect(<jest.Mock>updatePayment_FULFILLED).toBeCalledWith(metricsOptions);
+      requestMock.done();
+    });
+
+    it('sends amplitude ping on error', async () => {
+      const { token } = params;
+      const requestMock = nock(AUTH_BASE_URL)
+        .post(path, { token })
+        .reply(400, { message: 'oops' });
+      let error = null;
+      try {
+        await apiUpdateBillingAgreement(params);
+      } catch (e) {
+        error = e;
+      }
+      expect(error).not.toBeNull();
+      expect(<jest.Mock>updatePayment_PENDING).toBeCalledWith(metricsOptions);
+      expect(<jest.Mock>updatePayment_REJECTED).toBeCalledWith({
         ...metricsOptions,
         error,
       });
